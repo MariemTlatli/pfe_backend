@@ -1,0 +1,11 @@
+{
+  "n_users": 5,
+  "n_exercises": 12,
+  "n_skills": 3,
+  "n_train_users": 4,
+  "n_val_users": 0,
+  "n_test_users": 1,
+  "n_train_interactions": 60,
+  "n_val_interactions": 0,
+  "n_test_interactions": 15
+}

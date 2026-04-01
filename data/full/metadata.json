@@ -1,0 +1,121 @@
+{
+  "config": {
+    "n_students": 200,
+    "n_skills": 10,
+    "n_exercises_per_skill": 8,
+    "n_interactions": 200,
+    "description": "Dataset complet pour entra\u00eenement SAINT+"
+  },
+  "stats": {
+    "total_students": 200,
+    "total_skills": 10,
+    "total_exercises": 80,
+    "total_interactions": 40000,
+    "avg_interactions_per_student": 200.0,
+    "overall_correct_rate": 0.7129,
+    "correct_rate_by_skill": {
+      "0": 0.8332,
+      "1": 0.8276,
+      "2": 0.7901,
+      "3": 0.7418,
+      "4": 0.7005,
+      "5": 0.732,
+      "6": 0.6776,
+      "7": 0.632,
+      "8": 0.6173,
+      "9": 0.5763
+    }
+  },
+  "skills": [
+    {
+      "id": 0,
+      "name": "competence_0",
+      "difficulty": 0.3,
+      "prerequisites": []
+    },
+    {
+      "id": 1,
+      "name": "competence_1",
+      "difficulty": 0.356,
+      "prerequisites": [
+        0
+      ]
+    },
+    {
+      "id": 2,
+      "name": "competence_2",
+      "difficulty": 0.411,
+      "prerequisites": [
+        1
+      ]
+    },
+    {
+      "id": 3,
+      "name": "competence_3",
+      "difficulty": 0.467,
+      "prerequisites": [
+        2
+      ]
+    },
+    {
+      "id": 4,
+      "name": "competence_4",
+      "difficulty": 0.522,
+      "prerequisites": [
+        3
+      ]
+    },
+    {
+      "id": 5,
+      "name": "competence_5",
+      "difficulty": 0.578,
+      "prerequisites": [
+        4
+      ]
+    },
+    {
+      "id": 6,
+      "name": "competence_6",
+      "difficulty": 0.633,
+      "prerequisites": [
+        5
+      ]
+    },
+    {
+      "id": 7,
+      "name": "competence_7",
+      "difficulty": 0.689,
+      "prerequisites": [
+        6
+      ]
+    },
+    {
+      "id": 8,
+      "name": "competence_8",
+      "difficulty": 0.744,
+      "prerequisites": [
+        7
+      ]
+    },
+    {
+      "id": 9,
+      "name": "competence_9",
+      "difficulty": 0.8,
+      "prerequisites": [
+        8
+      ]
+    }
+  ],
+  "exercise_count_by_skill": {
+    "0": 8,
+    "1": 8,
+    "2": 8,
+    "3": 8,
+    "4": 8,
+    "5": 8,
+    "6": 8,
+    "7": 8,
+    "8": 8,
+    "9": 8
+  }
+}

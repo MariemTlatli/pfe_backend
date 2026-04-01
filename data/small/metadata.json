@@ -1,0 +1,51 @@
+{
+  "config": {
+    "n_students": 5,
+    "n_skills": 3,
+    "n_exercises_per_skill": 4,
+    "n_interactions": 15,
+    "description": "Petit dataset p\u00e9dagogique"
+  },
+  "stats": {
+    "total_students": 5,
+    "total_skills": 3,
+    "total_exercises": 12,
+    "total_interactions": 75,
+    "avg_interactions_per_student": 15.0,
+    "overall_correct_rate": 0.64,
+    "correct_rate_by_skill": {
+      "0": 0.7727,
+      "1": 0.6538,
+      "2": 0.5185
+    }
+  },
+  "skills": [
+    {
+      "id": 0,
+      "name": "competence_0",
+      "difficulty": 0.3,
+      "prerequisites": []
+    },
+    {
+      "id": 1,
+      "name": "competence_1",
+      "difficulty": 0.55,
+      "prerequisites": [
+        0
+      ]
+    },
+    {
+      "id": 2,
+      "name": "competence_2",
+      "difficulty": 0.8,
+      "prerequisites": [
+        1
+      ]
+    }
+  ],
+  "exercise_count_by_skill": {
+    "0": 4,
+    "1": 4,
+    "2": 4
+  }
+}

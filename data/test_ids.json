@@ -1,0 +1,18 @@
+{
+  "user_id": "69bca278d0cfc7e1e953f0d8",
+  "competence_ids": [
+    "69bca279d0cfc7e1e953f0db",
+    "69bca279d0cfc7e1e953f0dc",
+    "69bca279d0cfc7e1e953f0dd"
+  ],
+  "exercise_ids": [
+    "69bca279d0cfc7e1e953f0df",
+    "69bca279d0cfc7e1e953f0e0",
+    "69bca279d0cfc7e1e953f0e1",
+    "69bca279d0cfc7e1e953f0e2",
+    "69bca279d0cfc7e1e953f0e3",
+    "69bca279d0cfc7e1e953f0e4"
+  ],
+  "correct_answer": "R\u00e9ponse A",
+  "wrong_answer": "R\u00e9ponse B"
+}
