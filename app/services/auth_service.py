@@ -23,7 +23,10 @@ class AuthService:
             "username": username,
             "email": email,
             "password": hashed_password,
-            "created_at": datetime.utcnow()
+            "created_at": datetime.utcnow(),
+            "xp": 0,
+            "level": 1,
+            "badges": []
         }
 
         result = users.insert_one(user_data)

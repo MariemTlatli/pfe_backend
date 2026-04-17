@@ -39,6 +39,9 @@ def create_app(config_class=None):
     #  ENREGISTREMENT DES ROUTES
     # ═══════════════════════════════════════════════════════════════════════
     # ── auth_blp Check ──
+    from app.routes.gamification_routes import blp as gamification_blp
+    api.register_blueprint(gamification_blp)
+    
     try:
       from app.routes.user_subject_routes import blp as user_subject_blp
       api.register_blueprint(user_subject_blp)

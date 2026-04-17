@@ -267,8 +267,8 @@ class SAINTService:
             .sort("created_at", 1)
             .limit(limit)
         )
-        print("responses count:", len(responses))
-        print("responses:", responses)
+        # print("responses count:", len(responses))
+        # print("responses:", responses)
         # print("responses", responses.count)
         if not responses:
             return None
@@ -409,9 +409,9 @@ class SAINTService:
         result["zone_label"] = zone_info["label"]
         result["is_ready_to_learn"] = zone_info["is_ready"]
 
-        # ── 4. Tentatives estimées ──
-        estimated_attempts = cls._estimate_attempts(p_correct)
-        result["estimated_attempts"] = estimated_attempts
+        # # ── 4. Tentatives estimées ──
+        # estimated_attempts = cls._estimate_attempts(p_correct)
+        # result["estimated_attempts"] = estimated_attempts
 
         # ── 5. Probabilité de besoin d'indice ──
         hint_info = cls._compute_hint_probability(p_correct, raw_data)
@@ -447,39 +447,98 @@ class SAINTService:
     # ──────────────────────────────────────────────
     # MÉTRIQUE 1 : Mastery par compétence
     # ──────────────────────────────────────────────
+    import numpy as np
+    from typing import List, Dict, Any
 
     @classmethod
-    def _compute_mastery(cls, p_correct, raw_data, competence_id):
+    def _compute_mastery(
+        cls, 
+        p_correct: float, 
+        raw_data: List[Dict[str, Any]], 
+        competence_id: str,
+        alpha: float = 0.25,          # Décroissance EMA (0.15=stable, 0.35=réactif)
+        recent_window: int = 5,       # Fenêtre empirique récente
+        model_weight: float = 0.65,   # Confiance accordée au modèle (λ)
+        min_interactions: int = 3     # Seuil cold-start
+    ) -> float:
         """
-        Calcule la maîtrise pour une compétence spécifique.
-
-        Si competence_id donné : moyenne pondérée des P(correct)
-        sur les interactions récentes de cette compétence.
-        Sinon : utilise P(correct) global.
+        Calcule la maîtrise via EMA(p_correct) + taux empirique récent.
+        Standard industrie : lisse la volatilité du modèle tout en restant ancré dans la réalité.
         """
+        # 1. Gardes de sécurité
         if not competence_id or not raw_data:
-            return p_correct
+            return float(np.clip(p_correct, 0.0, 1.0))
 
-        # Filtrer les interactions de cette compétence
+        # 2. Filtrer & trier chronologiquement
         comp_interactions = [
-            r for r in raw_data
-            if r["competence_id"] == str(competence_id)
+            r for r in raw_data if str(r.get("competence_id")) == str(competence_id)
         ]
+        
+        if len(comp_interactions) < min_interactions:
+            return float(np.clip(p_correct, 0.0, 1.0))  # Cold-start → confiance modèle
 
-        if not comp_interactions:
-            return p_correct
+        # Trier par timestamp si dispo, sinon ordre d'insertion
+        comp_interactions.sort(key=lambda x: x.get("timestamp", 0))
 
-        # Taux de réussite récent (pondéré récence)
-        n = len(comp_interactions)
-        weights = np.array([0.5 + 0.5 * (i / max(n - 1, 1)) for i in range(n)])
-        corrects = np.array([1.0 if r["is_correct"] else 0.0 for r in comp_interactions])
+        # 3. Calcul EMA sur l'historique
+        # Bootstrap depuis la première interaction
+        first_val = comp_interactions[0].get("p_correct")
+        if first_val is None:
+            first_val = 1.0 if comp_interactions[0].get("is_correct") else 0.0
+            
+        ema = first_val
+        for r in comp_interactions[1:]:
+            val = r.get("p_correct")
+            if val is None:
+                val = 1.0 if r.get("is_correct") else 0.0
+            ema = alpha * val + (1 - alpha) * ema
 
-        weighted_rate = np.average(corrects, weights=weights)
+        # Intégrer la prédiction courante (SAINT+)
+        ema = alpha * p_correct + (1 - alpha) * ema
 
-        # Combiner avec P(correct) du modèle (70% modèle, 30% historique)
-        mastery = 0.7 * p_correct + 0.3 * weighted_rate
+        # 4. Taux empirique récent (dernières K tentatives)
+        recent = comp_interactions[-recent_window:]
+        corrects = sum(1.0 if r.get("is_correct", False) else 0.0 for r in recent)
+        empirical_rate = corrects / len(recent)
 
-        return mastery
+        # 5. Fusion & clamp [0, 1]
+        mastery = model_weight * ema + (1 - model_weight) * empirical_rate
+        return float(np.clip(mastery, 0.0, 1.0))
+
+
+
+    # @classmethod
+    # def _compute_mastery(cls, p_correct, raw_data, competence_id):
+    #     """
+    #     Calcule la maîtrise pour une compétence spécifique.
+
+    #     Si competence_id donné : moyenne pondérée des P(correct)
+    #     sur les interactions récentes de cette compétence.
+    #     Sinon : utilise P(correct) global.
+    #     """
+    #     if not competence_id or not raw_data:
+    #         return p_correct
+
+    #     # Filtrer les interactions de cette compétence
+    #     comp_interactions = [
+    #         r for r in raw_data
+    #         if r["competence_id"] == str(competence_id)
+    #     ]
+
+    #     if not comp_interactions:
+    #         return p_correct
+
+    #     # Taux de réussite récent (pondéré récence)
+    #     n = len(comp_interactions)
+    #     weights = np.array([0.5 + 0.5 * (i / max(n - 1, 1)) for i in range(n)])
+    #     corrects = np.array([1.0 if r["is_correct"] else 0.0 for r in comp_interactions])
+
+    #     weighted_rate = np.average(corrects, weights=weights)
+
+    #     # Combiner avec P(correct) du modèle (70% modèle, 30% historique)
+    #     mastery = 0.7 * p_correct + 0.3 * weighted_rate
+
+    #     return mastery
 
     # ──────────────────────────────────────────────
     # MÉTRIQUE 2 : Zone ZPD
@@ -944,12 +1003,7 @@ class SAINTService:
         # Mettre à jour UserProgress
         mastery = result.get("mastery", 0.0)
 
-        UserProgress.update_mastery(
-            user_id=user_id,
-            competence_id=competence_id,
-            mastery=float(mastery),
-            source="saint+"
-        )
+        print("mastery update_knowledge ", mastery)
 
         result["is_mastered"] = bool(mastery >= 0.85)
         return result
@@ -974,7 +1028,7 @@ class SAINTService:
             "confidence": result["confidence"]["level"],
             "engagement": result["engagement"]["level"],
             "hint_needed": result["hint_probability"],
-            "estimated_attempts": result["estimated_attempts"],
+            # "estimated_attempts": result["estimated_attempts"],
             "anomaly": result["anomaly"],
         }
 
@@ -1020,7 +1074,7 @@ class SAINTService:
             "zone": "frustration",
             "zone_label": "Pas encore de données",
             "is_ready_to_learn": True,
-            "estimated_attempts": {"value": 3, "label": "Estimation par défaut"},
+            # "estimated_attempts": {"value": 3, "label": "Estimation par défaut"},
             "hint_probability": {"probability": 0.5, "level": "moyen",
                                   "description": "Pas assez de données"},
             "engagement": {"score": 0.5, "level": "inconnu",

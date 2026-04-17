@@ -21,6 +21,7 @@ from app.models.user_progress import UserProgress
 from app.schemas.submission_schema import SubmitResponseWithEmotionSchema
 from app.services.decision_service import DecisionService
 from app.services.saint_service import SAINTService
+from app.services.gamification_service import GamificationService
 from app.schemas.user_response import SubmitResponseSchema
 from app.schemas.user_progress import UserProgressListSchema
 from app.services.zpd_service import ZPDService
@@ -72,7 +73,7 @@ class SubmitResponseWithEmotion(MethodView):
         5. Décision service (simulation LLM)
         """
         db = mongo.db
-        
+        print("execution")
         # ══════════════════════════════════════════════════════════
         # ── 1. DONNÉES DE BASE ──
         # ══════════════════════════════════════════════════════════
@@ -84,7 +85,7 @@ class SubmitResponseWithEmotion(MethodView):
         hints_used = data.get("hints_used", 0)
         emotion_data = data.get("emotion_data", {})
         
-        current_mastery = data.get("currentMasteryLevel", 0.0)
+        current_mastery = data.get("current_mastery_level", 0.0)
         
         # ══════════════════════════════════════════════════════════
         # ── 2. VÉRIFIER LA RÉPONSE ──
@@ -104,20 +105,22 @@ class SubmitResponseWithEmotion(MethodView):
             mastery_level=current_mastery,
             user_id=user_id,
         )
+
+        print("zpd_result", zpd_result.get("mastery_level"))
         
         # ══════════════════════════════════════════════════════════
         # ── 4. SAINT+ (MISE À JOUR MAÎTRISE) ──
         # ══════════════════════════════════════════════════════════
-        saint_result = SAINTService.update_knowledge(
-            db=db,
+        
+        UserProgress.update_mastery(
             user_id=user_id,
-            competence_id=str(competence_id),
-            is_correct=is_correct,
+            competence_id=competence_id,
+            mastery=float(zpd_result.get("mastery_level")),
+            source="saint+"
         )
 
         print("zpd_result", zpd_result)
-        print("mastery_level", current_mastery)
-        print("saint_result", saint_result)
+        print("mastery_level", zpd_result.get("mastery_level"))
         
         # ══════════════════════════════════════════════════════════
         # ── 5. SAUVEGARDE DE LA RÉPONSE ──
@@ -136,33 +139,18 @@ class SubmitResponseWithEmotion(MethodView):
         # Ajouter les champs enrichis
         response_doc["hints_used"] = hints_used
         response_doc["emotion_data"] = emotion_data
-        response_doc["saint_result"] = saint_result
         response_doc["zpd_result"] = zpd_result
-        response_doc["mastery_before"] = current_mastery
         response_doc["user_id"] = str(user_id)
         response_doc["exercise_id"] = str(exercise_id)
         response_doc["competence_id"] = str(competence_id)
         
-        # Insérer en base
-        response_id = UserResponse.insert(db, response_doc)
-        response_doc["_id"] = str(response_id)  # Ajouter l'ID de la rresponse_id
         
         # ══════════════════════════════════════════════════════════
         # ── 6. DÉCISION SERVICE (SIMULATION LLM) ──
         # ══════════════════════════════════════════════════════════
-        # decision = DecisionService.make_decision_with_llm(
-        #     user_id=user_id,
-        #     competence_id=competence_id,
-        #     saint_result=saint_result,
-        #     zpd_result=zpd_result,
-        #     emotion_data=emotion_data,
-        #     is_correct=is_correct,
-        #     time_spent=time_spent,
-        #     hints_used=hints_used,
-        # )
-        
-        decision = DecisionService.make_simple_decision(
-            saint_result=saint_result,
+        decision = DecisionService.make_decision_with_llm(
+            user_id=user_id,
+            competence_id=competence_id,
             zpd_result=zpd_result,
             emotion_data=emotion_data,
             is_correct=is_correct,
@@ -170,19 +158,91 @@ class SubmitResponseWithEmotion(MethodView):
             hints_used=hints_used,
         )
         
+        # decision = DecisionService.make_simple_decision(
+        #     zpd_result=zpd_result,
+        #     emotion_data=emotion_data,
+        #     is_correct=is_correct,
+        #     time_spent=time_spent,
+        #     hints_used=hints_used,
+        # )
+        
         # # Mettre à jour le document avec la décision
         db[UserResponse.collection_name].update_one(
             {"_id": response_id},
             {"$set": {"decision": decision}}
         )
-        print("+++++++++++++++" *20)
-        print("decision ", decision)
-        print("+++++++++++++++" *20)
+        # ══════════════════════════════════════════════════════════
+        # ── 7. GAMIFICATION ──
+        # ══════════════════════════════════════════════════════════
+        stats = UserResponse.get_user_stats(db, user_id, competence_id)
+        
+        # Attribution des points
+        gamification_result = GamificationService.award_points(
+            user_id=user_id,
+            is_correct=is_correct,
+            difficulty=decision.get("recommended_difficulty", 0.5),
+            time_spent=time_spent,
+            hints_used=hints_used,
+            emotion_data=emotion_data
+        )
+        
+        # Vérification des badges
+        new_badges = GamificationService.check_and_award_badges(
+            user_id=user_id,
+            stats=stats,
+            mastery_level=float(zpd_result.get("mastery_level", 0))
+        )
+        
+        # Enrichir la réponse avec les données de gamification
+        gamification_ui = {
+            "xp_earned": gamification_result["xp_earned"],
+            "total_xp": gamification_result["total_xp"],
+            "level": gamification_result["level"],
+            "level_up": gamification_result["level_up"],
+            "new_badges": new_badges
+        }
+        
+        # Mettre à jour le message d'encouragement si level up
+        if gamification_result["level_up"]:
+            decision["encouragement"] = f"🌟 INCROYABLE ! Tu es passé au niveau {gamification_result['level']} ! " + decision.get("encouragement", "")
+            decision["ui"]["show_celebration"] = True
+            decision["ui"]["encouragement"] = "🌟 INCROYABLE ! Tu es passé au niveau {gamification_result['level']} ! "
 
         # ══════════════════════════════════════════════════════════
-        # ── 7. RÉPONSE FINALE ──
+        # ── 8. RÉCOMPENSE MAÎTRISE (PLUS 4) ──
+        # ══════════════════════════════════════════════════════════
+        # On vérifie si la compétence est maîtrisée (seuil 0.85 par défaut)
+        if float(zpd_result.get("mastery_level", 0)) >= 0.85:
+            progress = UserProgress.get_or_create(user_id, competence_id)
+            if not progress.get("plus4_reward_given", False):
+                # Attribution de la carte +4
+                reward_res = GamificationServiceV2.attribuer_carte_plus4(user_id, competence_id)
+                if reward_res["success"]:
+                    # Marquer que la récompense a été donnée
+                    mongo.db[UserProgress.COLLECTION].update_one(
+                        {"_id": progress["_id"]},
+                        {"$set": {"plus4_reward_given": True}}
+                    )
+                    # Ajouter à l'UI
+                    gamification_ui["plus4_earned"] = True
+                    decision["encouragement"] = "🏆 MAÎTRISE TOTALE ! Tu as gagné une carte +4 (4 indices gratuits) !" + decision.get("encouragement", "")
+
+        decision["gamification"] = gamification_ui
+
+        # Mettre à jour le document avec la décision finale et gamification
+        db[UserResponse.collection_name].update_one(
+            {"_id": response_id},
+            {"$set": {
+                "decision": decision,
+                "gamification": gamification_ui
+            }}
+        )
+
+        # ══════════════════════════════════════════════════════════
+        # ── 8. RÉPONSE FINALE ──
         # ══════════════════════════════════════════════════════════
         return to_jsonable(decision), 201
+
 
 @response_bp.route("/history/<user_id>")
 class UserResponseHistory(MethodView):
@@ -220,34 +280,11 @@ class CompetenceStats(MethodView):
         # Stats utilisateur pour cette compétence
         stats = UserResponse.get_user_stats(db, user_id, competence_id)
         
-        if stats["total"] == 0:
-            return {
-                "user_id": user_id,
-                "competence_id": competence_id,
-                "total_attempts": 0,
-                "message": "Aucune donnée disponible"
-            }
-        
-        # Récupérer la progression actuelle
-        progress = UserProgress.get_or_create(user_id, competence_id)
-        
-        # Récupérer la dernière prédiction SAINT+
-        last_prediction = UserProgress.get_last_prediction(user_id, competence_id)
         
         return {
             "user_id": user_id,
             "competence_id": competence_id,
-            "total_attempts": stats["total"],
-            "correct_answers": stats["correct"],
-            "incorrect_answers": stats["incorrect"],
-            "success_rate": stats["success_rate"],
-            "current_mastery": progress.get("mastery", 0.0),
-            "exercises_completed": progress.get("exercises_completed", 0),
-            "current_streak": stats["streak"],
-            "best_streak": stats["best_streak"],
-            "average_time": stats["avg_time"],
-            "last_prediction": last_prediction,
-            "source": progress.get("source", "saint+")
+            "stats": stats
         }
 
 

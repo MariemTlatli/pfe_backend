@@ -25,3 +25,7 @@ class UserSchema(Schema):
         load_only=True,
         validate=validate.Length(min=6)
     )
+    joker_cards = fields.Integer(dump_only=True, dump_default=0)
+    plus4_cards = fields.Integer(dump_only=True, dump_default=0)
+    reverse_cards = fields.Integer(dump_only=True, dump_default=0)
+    skip_cards = fields.Integer(dump_only=True, dump_default=0)

@@ -3,6 +3,9 @@ from flask_smorest import Blueprint, abort
 from marshmallow import ValidationError, Schema, fields
 from app.models.user import UserSchema
 from app.services.auth_service import AuthService
+from app.services.gamification_service import GamificationService
+from app.extensions import mongo
+from bson import ObjectId
 
 # ── Blueprint Smorest ──
 auth_blp = Blueprint(
@@ -70,6 +73,28 @@ class RegisterView(MethodView):
 
         except Exception as e:
             abort(500, message=f"Erreur serveur: {str(e)}")
+            
+
+# ──────────────────────────────────────
+#  GET /api/auth/profile/<user_id>
+# ──────────────────────────────────────
+@auth_blp.route("/profile/<user_id>")
+class ProfileView(MethodView):
+    
+    @auth_blp.response(200, UserSchema)
+    @auth_blp.alt_response(404, description="Utilisateur non trouvé")
+    def get(self, user_id):
+        """Récupère le profil complet d'un utilisateur"""
+        
+        user = mongo.db.users.find_one({"_id": ObjectId(user_id)})
+        if not user:
+            abort(404, message="Utilisateur non trouvé")
+            
+        # # Enrichir avec les infos de calcul si nécessaire
+        # gamification = GamificationService.get_user_gamification(user_id)
+        # user.update(gamification)
+        
+        return user
 
 
 # ──────────────────────────────────────

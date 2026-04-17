@@ -103,7 +103,7 @@ class GenerateExercises(MethodView):
         if not zpd_analysis:
             abort(500, message="Échec de l'analyse SAINT+")
 
-        # Extraire le contexte SAINT+
+        # Extraire le contexte SAINT+ de base
         saint_context = {
             "mastery": zpd_analysis.get("mastery_level", 0.0),
             "zone": zpd_analysis.get("effective_zone", "frustration"),
@@ -119,7 +119,17 @@ class GenerateExercises(MethodView):
                                     .get("p_correct", 0.5),
         }
 
-        print(f"[ADAPTIVE] Contexte SAINT+: {saint_context}")
+        # 🚀 OVERRIDES LLM (Décision Service)
+        # Si la requête contient une difficulté ou des types recommandés par le LLM, on les utilise
+        if "difficulty" in data and data["difficulty"] is not None:
+            print(f"[LLM-OVERRIDE] Utilisation difficulté recommandée : {data['difficulty']}")
+            saint_context["optimal_difficulty"] = data["difficulty"]
+            
+        if "exercise_types" in data and data["exercise_types"]:
+            print(f"[LLM-OVERRIDE] Utilisation types recommandés : {data['exercise_types']}")
+            saint_context["recommended_exercise_types"] = data["exercise_types"]
+
+        print(f"[ADAPTIVE] Contexte final pour génération: {saint_context}")
 
         # ═══════════════════════════════════════════════════
         # Générer les exercices adaptatifs

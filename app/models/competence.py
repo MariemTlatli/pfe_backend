@@ -28,7 +28,7 @@ class Competence:
     ZONE_FRUSTRATION = "frustration"
 
     DEFAULT_ZPD_THRESHOLDS = {
-        "mastered": 0.90,   # Au-dessus → compétence acquise
+        "mastered": 0.85,   # Au-dessus → compétence acquise
         "learning": 0.40,   # Entre learning et mastered → ZPD (zone optimale)
         # En-dessous de learning → zone de frustration
     }

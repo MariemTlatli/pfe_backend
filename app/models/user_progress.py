@@ -19,7 +19,7 @@ class UserProgress:
     # ──────────────────────────────────────────────
 
     @staticmethod
-    def get_or_create(user_id, competence_id):
+    def get_or_create(user_id, competence_id , difficulty=0.5):
         """
         Récupérer ou créer le progrès d'un utilisateur pour une compétence.
         """
@@ -37,7 +37,8 @@ class UserProgress:
                 'exercises_completed': 0,
                 'last_attempt': None,
                 'last_prediction': None,    # Dernière prédiction SAINT+ complète
-                'updated_at': datetime.utcnow()
+                'difficulty': difficulty,
+                'plus4_reward_given': False
             }
             result = mongo.db[UserProgress.COLLECTION].insert_one(progress)
             progress['_id'] = result.inserted_id
@@ -202,6 +203,7 @@ class UserProgress:
                 if progress.get('last_attempt') else None,
             'updated_at': progress['updated_at'].isoformat()
                 if progress.get('updated_at') else None,
+            'plus4_reward_given': progress.get('plus4_reward_given', False)
         }
 
         # Inclure la dernière prédiction si disponible

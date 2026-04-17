@@ -64,6 +64,7 @@ class ZPDService:
             mastery_level = saint_prediction.get("mastery", mastery_level)
 
         zone = Competence.classify_zone(mastery_level, thresholds)
+        
         optimal_difficulty = Competence.get_optimal_difficulty(mastery_level, diff_params)
         exercise_types = Competence.get_exercise_types(mastery_level, thresholds)
 
@@ -107,7 +108,7 @@ class ZPDService:
                 "p_correct": saint_prediction.get("p_correct"),
                 "engagement": saint_prediction.get("engagement"),
                 "hint_probability": saint_prediction.get("hint_probability"),
-                "estimated_attempts": saint_prediction.get("estimated_attempts"),
+                # "estimated_attempts": saint_prediction.get("estimated_attempts"),
                 "anomaly": saint_prediction.get("anomaly"),
                 "confidence": saint_prediction.get("confidence"),
             }

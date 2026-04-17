@@ -76,6 +76,16 @@ class GenerateExercisesRequestSchema(Schema):
         load_default=False,
         metadata={"description": "Régénérer les exercices existants"}
     )
+    
+    difficulty = fields.Float(
+        validate=validate.Range(min=0.1, max=1.0),
+        metadata={"description": "Difficulté recommandée (override LLM/Décision)"}
+    )
+    
+    exercise_types = fields.List(
+        fields.String(),
+        metadata={"description": "Types d'exercices suggérés (override LLM/Décision)"}
+    )
 
 
 class SubmitAnswerSchema(Schema):

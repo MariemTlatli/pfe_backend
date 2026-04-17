@@ -10,6 +10,7 @@ Chaque fois qu'un utilisateur soumet une réponse, on stocke :
 Ces données alimentent ensuite le BKT (étape 7).
 """
 
+from app.models import UserProgress
 from bson import ObjectId
 from datetime import datetime
 
@@ -164,16 +165,30 @@ class UserResponse:
         Returns:
             dict: {total, correct, incorrect, success_rate, avg_time, streak}
         """
-        collection = db[UserResponse.collection_name]
+         # ✅ Utiliser la BONNE collection
+        collection = db["user_responses"]  
+        
+        # Ne PAS convertir en ObjectId si stockés en string
         query = {
-            "user_id": ObjectId(user_id) if isinstance(user_id, str) else user_id
+            "user_id": user_id  # garde en string
         }
         if competence_id:
-            query["competence_id"] = ObjectId(competence_id) if isinstance(competence_id, str) else competence_id
+            query["competence_id"] = competence_id
+        responses1 = list(collection.find(query))
+        print(responses1)    
 
-        responses = list(collection.find(query).sort("created_at", 1))
+        collection = db["user_progress"]
+        
+        query2 = {
+            "user_id": user_id  # garde en string
+        }
+        if competence_id:
+            query2["competence_id"] = ObjectId(competence_id) if isinstance(competence_id, str) else competence_id
 
-        if not responses:
+        responses2 = list(collection.find(query2))
+        print(responses2)   
+        print(responses2)
+        if not responses2:
             return {
                 "total": 0,
                 "correct": 0,
@@ -184,40 +199,22 @@ class UserResponse:
                 "best_streak": 0,
             }
 
-        total = len(responses)
-        correct = sum(1 for r in responses if r["is_correct"])
-        incorrect = total - correct
-        success_rate = round(correct / total, 3) if total > 0 else 0.0
-
-        times = [r.get("time_spent", 0) for r in responses if r.get("time_spent", 0) > 0]
-        avg_time = round(sum(times) / len(times)) if times else 0
-
-        # Streak actuelle (série de bonnes réponses depuis la fin)
-        streak = 0
-        for r in reversed(responses):
-            if r["is_correct"]:
-                streak += 1
-            else:
-                break
-
-        # Meilleure streak
-        best_streak = 0
-        current = 0
-        for r in responses:
-            if r["is_correct"]:
-                current += 1
-                best_streak = max(best_streak, current)
-            else:
-                current = 0
+        totalProgress = len(responses1)
+        totalReponses = len(responses2)
+        correct = sum(1 for r in responses2 if r.get("is_correct", False))
+        incorrect = totalReponses - correct
+        print("exercices", totalProgress)
+        print("totalReponses", totalReponses)
+        print("correct", correct)
+        print("incorrect", incorrect)
+       
+       
 
         return {
-            "total": total,
-            "correct": correct,
-            "incorrect": incorrect,
-            "success_rate": success_rate,
-            "avg_time": avg_time,
-            "streak": streak,
-            "best_streak": best_streak,
+            "totalReponses": totalReponses,
+            "total_correct": correct,
+            "total_incorrect": incorrect,
+  
         }
 
     @staticmethod

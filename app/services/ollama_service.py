@@ -44,7 +44,8 @@ class OllamaService:
             "stream": False,
             "options": {
                 "num_predict": max_tokens
-            }
+            }, 
+            "format": "json",
         }
         
         if system_prompt:
@@ -71,20 +72,9 @@ class OllamaService:
             raise Exception(f"Erreur Ollama: {str(e)}")
     
     @staticmethod
-    def generate_json(prompt, system_prompt=None, temperature=0.3):
+    def generate_json(prompt, system_prompt=None, temperature=0.3, max_tokens=2048):
         """
-        Générer une réponse JSON structurée.
-        
-        Args:
-            prompt (str): Le prompt
-            system_prompt (str, optional): Instructions système
-            temperature (float): Faible pour plus de cohérence
-            
-        Returns:
-            dict: Données JSON parsées
-            
-        Raises:
-            ValueError: Si le JSON est invalide
+        Générer une réponse JSON structurée et auto-réparée.
         """
         if system_prompt is None:
             system_prompt = (
@@ -93,44 +83,90 @@ class OllamaService:
                 "Pas de markdown, juste du JSON brut."
             )
         
+        # ✅ Passer max_tokens explicitement pour éviter la troncature Ollama
         response_text = OllamaService.generate(
             prompt,
             temperature=temperature,
-            system_prompt=system_prompt
+            max_tokens=max_tokens,
+            system_prompt=system_prompt,
         )
         
-        # Nettoyer la réponse (parfois Ollama ajoute des balises markdown)
+        # 1️⃣ Nettoyage initial
         response_text = response_text.strip()
         
-        # Retirer les balises markdown si présentes
-        if response_text.startswith('```json'):
-            response_text = response_text[7:]
-        if response_text.startswith('```'):
-            response_text = response_text[3:]
-        if response_text.endswith('```'):
-            response_text = response_text[:-3]
+        # 2️⃣ Extraction robuste du bloc JSON (ignore texte/markdown parasite)
+        start = response_text.find('{')
+        end = response_text.rfind('}')
         
-        response_text = response_text.strip()
-        
-        # Normaliser les caractères de contrôle invalides dans les chaînes
-        # Remplacer les vraies ruptures de ligne par \n échappé
+        if start != -1 and end != -1:
+            response_text = response_text[start : end + 1]
+        else:
+            # Fallback regex pour les cas où find/rfind échoue
+            response_text = re.sub(r'^```(?:json)?\s*', '', response_text, flags=re.IGNORECASE)
+            response_text = re.sub(r'\s*```$', '', response_text)
+            response_text = response_text.strip()
+            
+        # 3️⃣ Normalisation des caractères de contrôle
         response_text = OllamaService._normalize_json_string(response_text)
         
-        # Première tentative de parsing
+        # 4️⃣ Parsing avec réparation automatique
         try:
             return json.loads(response_text)
-        except json.JSONDecodeError as first_exc:
-            # essayer de réparer quelques fautes courantes (virgules manquantes, etc.)
+        except json.JSONDecodeError:
             repaired = OllamaService._repair_json(response_text)
             try:
                 return json.loads(repaired)
-            except json.JSONDecodeError as second_exc:
+            except json.JSONDecodeError as e:
                 raise ValueError(
-                    f"Réponse JSON invalide: {second_exc}\n\n"
-                    f"Texte original :\n{response_text}\n\n"
-                    f"Texte réparé   :\n{repaired}"
+                    f"JSON invalide même après réparation: {e}\n"
+                    f"Brut: {response_text[:300]}...\n"
+                    f"Réparé: {repaired[:300]}..."
                 )
-    
+
+    @staticmethod
+    def _repair_json(text):
+        """
+        Répare automatiquement les JSON tronqués ou mal formatés par les LLM :
+        - Virgules superflues
+        - Accolades/crochets non fermés
+        """
+        if not text:
+            return text
+            
+        # Supprime les virgules traînantes avant } ou ]
+        text = re.sub(r',\s*([}\]])', r'\1', text)
+        # Ajoute les virgules manquantes entre }{ ou ][
+        text = re.sub(r'(?<=[\}\]])\s*(?=[\{\[])', ', ', text)
+        
+        # ✅ Fermeture automatique des structures ouvertes (stack-based)
+        stack = []
+        in_string = False
+        escape_next = False
+        
+        for char in text:
+            if escape_next:
+                escape_next = False
+                continue
+            if char == '\\' and in_string:
+                escape_next = True
+                continue
+            if char == '"':
+                in_string = not in_string
+                continue
+                
+            if not in_string:
+                if char in '{[':
+                    stack.append(char)
+                elif char == '}' and stack and stack[-1] == '{':
+                    stack.pop()
+                elif char == ']' and stack and stack[-1] == '[':
+                    stack.pop()
+                    
+        # Ajoute les fermetures manquantes dans l'ordre inverse
+        closings = ['}' if c == '{' else ']' for c in reversed(stack)]
+        text += ''.join(closings)
+        
+        return text
     @staticmethod
     def _normalize_json_string(text):
         """
